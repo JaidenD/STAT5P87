@@ -35,9 +35,19 @@ LAR <- function(X, y, beta1) {
   
   J = which(abs(c) == C) # Indices of maximum correlation
   
-  # Compute how much we should increase β_j for all j∈J
-  A_J = 
-  X_J = 
+  # Compute how much we should increase β_j for all j ∈ J
+  X_J = X[,J]
+
+  # Compute some intermediate values
+  G_J = t(X_J) %*% X_J
+  ones = rep(1,dim(J))
+  A_J = -1/sqrt(t(ones) %*% solve(G_J) %*% ones)
+  w_J = A_J %*% solve(G_J) %*% ones
+  u_J = X_J %*% w_J
+  A = t(X) %*% u_J
+
+  # Compute how much we should increase βj for all j ∈ J
+  
 }
 
 
