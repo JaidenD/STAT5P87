@@ -67,13 +67,26 @@ LAR_step <- function(X, y, beta_hat, tol = 1e-9) {
 
 beta_hat=rep(0,dim(X)[2]) # Initial value
 
-beta_history = list()  # To save beta_hat at each step
-beta_history[[1]] = beta_hat # Add initial value
+steps = 3 # Iterations of the algorithm
 
-steps = 3
+beta_history = matrix(NA, nrow = dim(X)[2], ncol = steps+1)  # To save beta_hat at each step
+beta_history[,1] = beta_hat # Add initial value
+
+t = rep(0,steps+1)
+t[0] = sum(abs(beta_hat))
+
 for (step in 1:steps) {
   beta_hat = LAR_step(X, y, beta_hat)  # Perform one LAR step
-  beta_history[[step+1]] = beta_hat     # Save the current beta_hat
+  beta_history[,step+1] = beta_hat     # Save the current beta_hat
+  t[step+1] = sum(abs(beta_history[,step+1]))
 }
 
 beta_history
+t
+
+y_range = range(beta_history[2:4, ])
+plot(t, beta_history[2,], type = "b", col = "red", xlab = "t", ylab = "coefficient",ylim = y_range, bty="n")
+lines(t, beta_history[3,], type = "b", col = "blue")
+lines(t, beta_history[4,], type = "b", col = "green")
+legend("topleft", legend = c("lcavol", "lweight", "age"), col = c("red", "blue", "green"), lty = 1, pch = 1,bty = "n")
+
