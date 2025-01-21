@@ -26,35 +26,55 @@ x3 = rescale(x3)
 y = y-mean(y)
 
 X = cbind(1,x1,x2,x3)
-beta1=rep(0,dim(X)[2])
+beta_hat=rep(0,dim(X)[2])
 
-LAR <- function(X, y, beta1) {
-  ehat =  y - X %*% beta1
+LAR <- function(X, y, beta_hat) {
+  ehat =  y - X %*% beta_hat
   c = t(X) %*% ehat # Correlations
   C = max(abs(c)) # Maximum correlation
   
   J = which(abs(c) == C) # Indices of maximum correlation
   
   # Compute how much we should increase β_j for all j ∈ J
-  X_J = X[,J]
-
+  sign_of_c = matrix(sign(c[J]), nrow = nrow(t(t(X[,J]))), ncol = ncol(t(t(X[,J]))), byrow = TRUE)
+  X_J = sign_of_c*X[,J]
+  
   # Compute some intermediate values
   G_J = t(X_J) %*% X_J
-  ones = rep(1,dim(J))
+  ones = rep(1,length(J))
   A_J = -1/sqrt(t(ones) %*% solve(G_J) %*% ones)
   w_J = A_J %*% solve(G_J) %*% ones
   u_J = X_J %*% w_J
-  A = t(X) %*% u_J
-
-  # Compute how much we should increase βj for all j ∈ J
+  print(X)
+  print(u_J)
+  a = t(X) %*% u_J
+  print(a)
+  gamma_candidates <- numeric(length(J))
   
+  for (j in J) {
+    # Compute the two terms for gamma_hat
+    term1 = ifelse(A_J - a[j] != 0, (C - c[j]) / (A_J - a[j]), NA)
+    term2 = ifelse(A_J + a[j] != 0, (C + c[j]) / (A_J + a[j]), NA)
+    
+    term1 = if (term1 > 0) term1 else Inf
+    term2 = if (term2 > 0) term2 else Inf
+    
+    gamma_candidates[j] = min(term1, term2, na.rm = TRUE)
+  }
+  
+  # Find the minimum strictly positive value
+  gamma_hat = min(gamma_candidates[gamma_candidates > 0], na.rm = TRUE)
+  
+  beta_hat[J] = beta_hat[J] + sign(c[J])*gamma_hat%*%w_J
+  return(beta_hat)
 }
 
 
+beta_ls = solve(t(X) %*% X) %*% t(X) %*% y
+tol = 1e-6
 
-
-
-
-
+while (norm_vec(beta_hat - beta_ls) > tol) {
+  beta_hat = LAR(X, y, beta_hat)  # Call LAR iteratively
+}
 
 
