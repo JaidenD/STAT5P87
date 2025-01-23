@@ -21,7 +21,7 @@ y_train = train$Sepal.Length
 y_test = test$Sepal.Length
 
 # Optimize lambda
-lambda_values = 10^seq(-2, 0.5, length = 100)
+lambda_values = 10^seq(-1, 0.5, length = 100)
 lambda_amount = length(lambda_values)
 mse = matrix(NA, nrow = lambda_amount)
 
@@ -41,4 +41,4 @@ plot(lambda_values, mse, bty = 'n',
      lwd = 2, cex = 1.2)
 
 lambda_values[which(mse == min(mse))]
-
+# minimizing lambda = 1
