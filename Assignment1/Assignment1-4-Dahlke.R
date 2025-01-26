@@ -47,9 +47,6 @@ p = 15
 # How many times to iterate the simulation
 n_iterations = 1000
 
-# Size of training data
-n_training = 30
-
 # True Model: 
 #
 # b0 = 0, beta_j = 1/j
@@ -62,7 +59,6 @@ for(j in c(1:p)){
   B[j + 1] = 1/j
 }
 
-sigma = 1
 
 # x_new value to be predicted
 x_new = matrix(1/2, ncol = p + 1)
@@ -73,4 +69,44 @@ Ey_new = x_new %*% B
 
 # Initialize matrix to store results
 hatY = matrix(0, nrow = n_iterations, ncol = p)
+
+n = 30
+sigma = 1
+
+for (iter in 1:n_iterations) {
+  # Generate training data
+  X = simulate_X(n,p)
+  y = simulate_Y(X,B,sigma)
+  
+  for (k in 1:p) {
+    X_subset = X[, 1:(k+1)]
+    model = lm(y ~ X_subset - 1) # Fit without intercept
+    coef = model$coefficients
+    x_new_subset = x_new[,1:(k+1)]
+    hatY[iter,k] = sum(x_new_subset*coef) # Prediction
+  }
+}
+
+variance = apply(hatY, 2, var)
+squared_bias = (colMeans(hatY) - as.numeric(Ey_new))^2
+mse = squared_bias + variance
+
+plot(1:p, mse, 
+     type = "l", col = "red", lwd = 2,
+     ylim = c(0, max(c(squared_bias, variance, mse))),
+     xlab = "Number of predictors (k)", ylab = "Value",
+     main = "Bias-Variance Trade-off in Linear Regression")
+lines(1:p, squared_bias, col = "blue", lwd = 2, lty = 2)
+lines(1:p, variance, col = "darkgreen", lwd = 2, lty = 3)
+legend("topright", 
+       legend = c("MSE", "Bias²", "Variance"),
+       col = c("red", "blue", "darkgreen"),
+       lty = c(1, 2, 3), lwd = 2, cex = 0.8)
+
+
+
+
+
+
+
 
