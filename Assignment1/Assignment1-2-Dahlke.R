@@ -3,10 +3,10 @@ data = read.csv("~/STAT5P87/Assignment1/a1-q2-data.csv")
 unique_id = 0
 
 for(school in unique(data$school)){
-  # Filter rows for current school
+  # Filter for current school
   school_rows = (data$school == school)
   
-  # Determine the unique students in the current school
+  # Unique students in current school
   unique_students = unique(data$student[school_rows])
   
   # Map old student IDs to new student IDs

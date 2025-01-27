@@ -70,8 +70,8 @@ Ey_new = x_new %*% B
 # Initialize matrix to store results
 hatY = matrix(0, nrow = n_iterations, ncol = p)
 
-n = 30
-sigma = 1
+n = 30 # Training size
+sigma = 1 # sd
 
 for (iter in 1:n_iterations) {
   # Generate training data

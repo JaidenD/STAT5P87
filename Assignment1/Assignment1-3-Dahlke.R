@@ -41,4 +41,4 @@ plot(lambda_values, mse, bty = 'n',
      lwd = 2, cex = 1.2)
 
 lambda_values[which(mse == min(mse))]
-# minimizing lambda = 1
+# ANS: minimizing lambda = 1
