@@ -1,7 +1,7 @@
 ### STAT5P87 - Week 2
 getwd()
 # load the dataset
-mydata = read.csv('prostate-data.csv')
+mydata = read.csv("~/STAT5P87/Lectures/Test1/prostate-data.csv")
 
 # Look at the header
 head(mydata)
@@ -94,7 +94,7 @@ model3 = lm(lpsa ~ lcp + lbph, data = training_data)
 # With no "newdata" defaults to training data
 yHat = predict(model3)
 mean((trainingY - yHat)^2)
-# 0.89
+# 0.59
 
 # The best model with k = 2 is 
 # lcavol + lbph with 0.54
@@ -111,7 +111,7 @@ model2 = lm(lpsa ~ lcp, data = training_data)
 # With no "newdata" defaults to training data
 yHat = predict(model2)
 mean((trainingY - yHat)^2)
-# 0.91
+# 0.91z
 
 model3 = lm(lpsa ~ lbph, data = training_data)
 # With no "newdata" defaults to training data
