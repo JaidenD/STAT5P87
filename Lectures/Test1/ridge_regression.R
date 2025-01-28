@@ -1,3 +1,4 @@
+### ridge regression############################################################
 data = read.csv("~/STAT5P87/Lectures/Test1/prostate-data.csv")
 data = data[,c(1, 4, 6, 9)]
 
@@ -14,18 +15,19 @@ testing = data[-training_index,]
 
 trainingY = training$lpsa
 
-inputs = 3
+lcavol = data$lcavol
+lbph = data$lbph
+lcp = data$lcp
 
-lcavol = (training[,1]-mean(training[,1]))/(sd(training[,1]))
-lbph = (training[,2]-mean(training[,2]))/(sd(training[,2]))
-lcp = (training[,3]-mean(training[,3]))/(sd(training[,3]))
+# Regularize
+lcavol = (lcavol - mean(lcavol))/sd(lcavol)
+lbph = (lbph - mean(lbph))/sd(lbph)
+lcp = (lcp - mean(lcp))/sd(lcp)
 
-trainingZ = cbind(lcavol,lbph,lcp)
-trainingY = training$lpsa
 
-lambda_values = seq(from = 5, to = 15, by = 0.01)
-n_lambda_values = length(lambda_values)
-mse = matrix(NA, nrow = n_lambda_values)
+lambda_values = 10^seq(from = -2, to = 2, by = 0.1)
+
+mse = matrix(NA, nrow = length(lambda_values))
 
 for(i in 1:n_lambda_values){
   lambda = lambda_values[i]
@@ -43,5 +45,18 @@ for(i in 1:n_lambda_values){
 
 plot(lambda_values, mse, bty = 'n', 
      lwd = 2, cex = 1.2)
-lambda_values[which.min(mse)]
-# lambda = 10.34
+
+# What is the index that minimizes the vector
+lambda = lambda_values[which.min(mse)]
+
+b0Hat = mean(trainingY)
+bHat = solve(t(trainingZ) %*% trainingZ + lambda * diag(p)) %*% t(trainingZ) %*% (trainingY - mean(trainingY))
+
+# Make predictions on testing data
+yHat = b0Hat + testingZ %*% bHat
+
+# Estimate mean-squared error
+mean((testingY - yHat)^2)
+
+b0Hat
+bHat
