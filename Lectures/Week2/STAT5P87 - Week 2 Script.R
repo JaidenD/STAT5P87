@@ -264,8 +264,8 @@ b0Hat = mean(trainingY)
 # manually. glmnet would do it good on its own
 # if I let it. 
 fit = glmnet(trainingZ, trainingY, alpha = 1, 
-               lambda = lambda, intercept = FALSE)
-  
+               lambda = 1, intercept = FALSE)
+fit  
 # Make predictions on testing data
 yHat = b0Hat + predict(fit, testingZ)
   

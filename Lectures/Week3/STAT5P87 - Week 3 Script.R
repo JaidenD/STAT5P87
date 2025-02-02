@@ -1,6 +1,6 @@
 ### STAT5P87 - Week 3 Script
 
-mydata = read.csv('simple-classification-data.csv')
+mydata = read.csv('~/STAT5P87/Lectures/Test1/simple-classification-data.csv')
 
 set.seed(0)
 
@@ -33,6 +33,7 @@ testingX = t((t(testingX) - xBar) / s)
 apply(trainingX, 2, mean)
 apply(trainingX, 2, sd)
 
+#
 
 ### Apply ridge regression
 
@@ -110,10 +111,10 @@ x2 = (0.5 - b0Hat)/bHat[2] - bHat[1]/bHat[2]*x1
 lines(x1, x2, lwd = 2)
 
 
-
+####################################################################################
 #### Logistic Regression
 
-mydata = read.csv('SAheart-data.csv')
+mydata = read.csv('~/STAT5P87/Lectures/Week3/SAheart-data.csv')
 head(mydata)
 
 
@@ -241,7 +242,7 @@ max(accuracy)
 
 # compare to lambda = 0
 accuracy[1]
-
+####################################################################################
 
 ###
 # Nonbinary Classification
