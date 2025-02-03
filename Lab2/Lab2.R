@@ -7,7 +7,6 @@ p = dim(X)[2]
 n = length(Y)
 classes = levels(Y)
 K = length(classes)
-
 nK = matrix(0, nrow = K)
 qK = matrix(0, nrow = K)
 
@@ -24,7 +23,7 @@ for(k in 1:K){
   muHat[k,] = apply(X[Y == classes[k],], 2, mean)
 }
 
-SigmaHatList <- list()  # Store covariances per class
+SigmaHatList = list()  # Store covariances per class
 for(k in 1:K){
   # Get data for class k
   X_k <- X[Y == classes[k], ]
@@ -34,8 +33,8 @@ for(k in 1:K){
   muMatrix <- matrix(rep(muHat[k,], n_k), 
                      nrow = n_k, ncol = p, 
                      byrow = TRUE)
-  Sigma_k <- t(X_k - muMatrix) %*% (X_k - muMatrix) / (n_k - 1)  # Note: (n_k - 1) for unbiased estimate
-  SigmaHatList[[k]] <- Sigma_k  # Assign to list
+  Sigma_k = t(X_k - muMatrix) %*% (X_k - muMatrix) / (n_k - 1)  # Note: (n_k - 1) for unbiased estimate
+  SigmaHatList[[k]] = Sigma_k  # Assign to list
 }
 
 # Compute discriminants-----------------------------------------------
@@ -68,8 +67,8 @@ n_testing = length(Y_testing)
 delta_testing = matrix(NA, nrow = n_testing, ncol = K)
 for(i in 1:n_testing){
   for(k in 1:K){
-    delta_testing[i, k] = qK[k] * exp(X_testing[i,] %*% solve(SigmaHatList[[k]]) %*% muHat[k,] - (1/2)*muHat[k,]%*%solve(SigmaHatList[[k]])%*%muHat[k,])
-  }
+    delta_testing[i, k] = qK[k]/sqrt(det(SigmaHatList[[k]])) * exp(-1/2*t(X_testing[i,]-muHat[k,]) %*% solve(SigmaHatList[[k]]) %*% (X_testing[i,]-muHat[k,])) 
+    }
 }
 
 # Find class that maximizes discriminant
