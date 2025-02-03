@@ -78,20 +78,3 @@ yHat_testing = classes[apply(delta_testing, 1, which.max)]
 # Compute testing accuracy
 mean(yHat_testing == Y_testing)
 
-
-### Sigma Hat exploration - alternate computation options
-k = 1
-muMatrix = matrix(rep(muHat[k,], nK[k]), 
-                  nrow = nK[k], ncol = p,
-                  byrow = TRUE)
-t(X[Y == classes[k]] - muMatrix) %*% (X[Y == classes[k]] - muMatrix)
-
-
-Sigma_test = matrix(0, nrow = p, ncol = p)
-Xk = X[Y == classes[k],]
-for(i in 1:nK[k]){
-  Sigma_test = Sigma_test + matrix(Xk[i,] - muHat[k,], nrow = p) %*% matrix(Xk[i,] - muHat[k,], ncol = p)
-  
-}
-Sigma_test
-
