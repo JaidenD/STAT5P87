@@ -37,22 +37,13 @@ for(k in 1:K){
   SigmaHatList[[k]] = Sigma_k  # Assign to list
 }
 
-# Compute discriminants-----------------------------------------------
+# Compute discriminants
 delta = matrix(NA, nrow = n, ncol = K)
 for(i in 1:n){
   for(k in 1:K){
     delta[i, k] = qK[k]/sqrt(det(SigmaHatList[[k]])) * exp(-1/2*t(X[i,]-muHat[k,]) %*% solve(SigmaHatList[[k]]) %*% (X[i,]-muHat[k,]))
   }                                                     
 }
-# --------------------------------------------------------------------------
-# Predict observation 1
-classes[which.max(delta[1,])]
-
-# Predict all observation
-yHat = apply(delta, 1, which.max)
-
-# Compute training accuracy
-mean(yHat == Y)
 
 
 ### Testing Accuracy
