@@ -29,20 +29,22 @@ createFolds <- function(y, k, stratified = FALSE, seed = 0) {
     }
     
     start_index <- 1
-    for (i in 1:k) {
+    for (i in seq_len(k)) {
       end_index <- start_index + fold_sizes[i] - 1
       folds[[i]] <- indices[start_index:end_index]
       start_index <- end_index + 1
     }
+    
   } else {
     # Stratified: The fold structure will preserve class proportions.
     # First, ensure that y is a factor.
     if (!is.factor(y)) {
       y <- as.factor(y)
     }
+    
     # Initialize each fold as an empty vector.
-    for (i in 1:k) {
-      folds[[i]] <- c()
+    for (i in seq_len(k)) {
+      folds[[i]] <- integer(0)
     }
     
     # For each level (class), split the indices of that class into k roughly equal parts.
@@ -59,7 +61,7 @@ createFolds <- function(y, k, stratified = FALSE, seed = 0) {
       }
       
       start_index <- 1
-      for (i in 1:k) {
+      for (i in seq_len(k)) {
         end_index <- start_index + fold_sizes[i] - 1
         folds[[i]] <- c(folds[[i]], lvl_indices[start_index:end_index])
         start_index <- end_index + 1
@@ -67,8 +69,20 @@ createFolds <- function(y, k, stratified = FALSE, seed = 0) {
     }
   }
   
+  # Return the folds for both cases
   return(folds)
 }
 
-kfold(10, 2, FALSE, )
-  # 
+# Test Case 1: Unstartified
+folds_numeric <- createFolds(10, 2, stratified = FALSE, seed = 0)
+folds_numeric
+
+# Test Case 2: Startified
+y_cat <- c("A", "A", "B", "B", "A", "B", "A", "B", "B", "A")
+
+folds_stratified <- createFolds(y_cat, 2, stratified = TRUE, seed = 0)
+folds_stratified
+
+
+
+

@@ -1,3 +1,7 @@
+# mu - mean
+# sigma = variance
+# p = probability of observing value from first distribution
+# n = number of samples
 mixture <- function(mu=c(mu1, mu2), sigma= c(sigma1,sigma2), p, n){
   observations = vector()
 
@@ -7,8 +11,6 @@ mixture <- function(mu=c(mu1, mu2), sigma= c(sigma1,sigma2), p, n){
   }
   observations
 }
-
-mixture(c(0,0), c(1,0), 0, 100) # For testing
 
 
 
