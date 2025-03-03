@@ -2,6 +2,7 @@ data = read.csv('piecewise-data.csv')
 x = data$X
 y = data$Y
 # spline methods
+library(splines)
 
 # cubic spline-------------------------------------------------
 ordr = order(x)
@@ -9,8 +10,8 @@ x = x[ordr]
 y = y[ordr]
 
 knot = c(0.25, 0.5, 0.75) # example
-H = bs(X, knots = knot, degree = 3, intercept = TRUE)
-model = lm(Y ~ 0 + ., data=H)
+H = bs(x, knots = knot, degree = 3, intercept = TRUE)
+model = lm(y ~ 0 + ., data=H)
 
 # For plotting smoothness
 x0 = seq(from=0, to=1, by=0.01)
@@ -21,6 +22,11 @@ y0 = predict(model, H0)
 plot(x,y)
 lines(x0, y0, col='green', lwd=2, lty = 2)
 
+# Make prediction to new data
+H_new = bs(0.6, knots = knot, degree = 3, intercept = TRUE)
+y_pred = predict(model, newdata = H_new)
+y_pred
+
 # natural spline--------------------------------------------
 ordr = order(x)
 x = x[ordr]
@@ -28,7 +34,7 @@ y = y[ordr]
 
 knot = c(0.25, 0.5, 0.75) # example
 H = ns(x,df=3, knots = knot, intercept=TRUE)
-model = lm(Y ~ 0 + ., data=H)
+model = lm(y ~ 0 + ., data=H)
 
 # For plotting smoothness
 x0 = seq(from=0, to=1, by=0.01)
@@ -38,22 +44,169 @@ y0 = predict(model, H0)
 plot(x,y)
 lines(x0, y0, col='green', lwd=2, lty = 2)
 
-# smoothing spline (not correct).
+###
+# Concrete Strength - Natural Spline Example  
+###
+
+mydata = read.csv('concrete-data.csv')
+n = dim(mydata)[1]
+mydata$age = mydata$age + rnorm(n, mean = 0, sd = 0.4)
+
+# Set up folds
+nFolds = 10
+n_per_fold = floor(n / nFolds)
+
+set.seed(0)
+folds = list()
+shuffled_index = sample(c(1:n))
+for(k in c(1:nFolds)){
+  folds[[k]] = shuffled_index[c((1 + (k - 1) * n_per_fold):(k * n_per_fold))]
+}  
+
+# Set up df's
+df_levels = c(2:20)
+n_df = length(df_levels)
+
+# Initialize mse
+testing_mse = matrix(0, nrow = n_df, ncol = nFolds)
+
+for(fold in c(1:nFolds)){
+  training_data = mydata[-folds[[fold]],]
+  n_training = dim(training_data)[1]
+  
+  testing_data = mydata[folds[[fold]],]
+  n_testing = dim(testing_data)[1]
+  
+  # Define X and Y 
+  trainingX = training_data$age
+  trainingY = training_data$strength
+  
+  testingX = testing_data$age
+  testingY = testing_data$strength
+  
+  testingX = (testingX - mean(trainingX)) / sd(trainingX)
+  trainingX = (trainingX - mean(trainingX)) / sd(trainingX)
+  
+  for(i in c(1:n_df)){
+    df = df_levels[i]
+    trainingN = ns(trainingX, df = df, intercept = TRUE)
+    model = lm(trainingY ~ 0 + ., data=trainingN)
+    
+    testingN = ns(testingX, knots = attr(trainingN, 'knots'), 
+                  Boundary.knots = attr(trainingN, 'Boundary.knots'), 
+                  intercept = TRUE) 
+    testingYhat = predict(model, newdata = testingN)
+    testing_mse[i, fold] = mean((testingY - testingYhat)^2)
+  }
+}
+
+testing_mse = apply(testing_mse, 1, mean)
+testing_mse
+
+df = df_levels[which.min(testing_mse)]
+df
+
+# Define X and Y 
+X = mydata$age
+Y = mydata$strength
+
+X = (X - mean(X)) / sd(X)
+
+N = ns(X, df = df, intercept = TRUE)
+model = lm(Y ~ 0 + ., data=N)
+
+x0 = seq(from = min(X), to = max(X), by = 0.01)
+N0 = ns(x0, knots = attr(N, 'knots'), 
+        Boundary.knots = attr(N, 'Boundary.knots'), 
+        intercept = TRUE) 
+y0 = predict(model, N0)
+
+plot(X, Y, lwd = 2, ylab = 'strength', xlab = 'age', main = 'Scatterplot of Strength vs. Age', bty = 'n')
+lines(x0, y0, lwd = 2, col = 'red')
+
+# smoothing spline-------------------------------------
 ordr = order(x)
 x = x[ordr]
 y = y[ordr]
 
-knot = unique(x) # example
-H = ns(x,df=3, knots = knot, intercept=TRUE)
-model = lm(Y ~ 0 + ., data=H)
+# Fit smoothing spline
+spline_model = smooth.spline(x, y)
 
 # For plotting smoothness
 x0 = seq(from=0, to=1, by=0.01)
-H0 = ns(x0,df=3, knots = knot, intercept=TRUE)
+y0 = predict(spline_model, x0)$y
 
-y0 = predict(model, H0)
-plot(x,y)
-lines(x0, y0, col='green', lwd=2, lty = 2)
+# Create plot
+plot(x, y, main="Smoothing Spline Fit")
+lines(x0, y0, col='green', lwd=2, lty=2)
+
+# Cross validated smoothing spline
+mydata = read.csv('concrete-data.csv')
+n = dim(mydata)[1]
+
+# Set up folds
+nFolds = 10
+n_per_fold = floor(n / nFolds)
+
+set.seed(0)
+folds = list()
+shuffled_index = sample(c(1:n))
+for(k in c(1:nFolds)){
+  folds[[k]] = shuffled_index[c((1 + (k - 1) * n_per_fold):(k * n_per_fold))]
+}  
+
+# Set up df's
+lambda_levels = seq(from = 0.001, to = 0.1, by = 0.001)
+n_lambda = length(lambda_levels)
+
+# Initialize mse
+testing_mse = matrix(0, nrow = n_lambda, ncol = nFolds)
+
+for(fold in c(1:nFolds)){
+  training_data = mydata[-folds[[fold]],]
+  n_training = dim(training_data)[1]
+  
+  testing_data = mydata[folds[[fold]],]
+  n_testing = dim(testing_data)[1]
+  
+  # Define X and Y 
+  trainingX = training_data$age
+  trainingY = training_data$strength
+  
+  testingX = testing_data$age
+  testingY = testing_data$strength
+  
+  testingX = (testingX - mean(trainingX)) / sd(trainingX)
+  trainingX = (trainingX - mean(trainingX)) / sd(trainingX)
+  
+  for(i in c(1:n_lambda)){
+    lambda = lambda_levels[i]
+    fit = smooth.spline(X, Y, lambda = lambda)
+    testingYhat = predict(fit, testingX)$y
+    testing_mse[i, fold] = mean((testingY - testingYhat)^2)
+  }
+}
+
+testing_mse = apply(testing_mse, 1, mean)
+testing_mse
+
+lambda = lambda_levels[which.min(testing_mse)]
+lambda
+
+# Define X and Y 
+X = mydata$age
+Y = mydata$strength
+
+X = (X - mean(X)) / sd(X)
+fit = smooth.spline(X, Y, lambda = lambda)
+fit$df
+
+x0 = seq(from = min(X), to = max(X), by = 0.01)
+y0 = predict(fit, x0)$y
+
+plot(X, Y, lwd = 2, ylab = 'strength', xlab = 'age', main = 'Scatterplot of Strength vs. Age', bty = 'n')
+lines(x0, y0, col = 'red', lwd = 2)
+
 
 # _______________________________________________
 
@@ -239,7 +392,134 @@ points(iris$Petal.Length, indicatorY[,2], col = 'dodgerblue3', cex = 1, lwd = 2)
 
 
 # local linear regression
+#########
+### Boundary Example 
+#########
 
+mydata = read.csv('boundary-example.csv')
+
+X = mydata$x
+Y = mydata$y
+n = length(Y)
+
+# For plotting f(X)
+x0 = seq(from=0, to=1, by=0.001)
+n0 = length(x0)
+y0 = matrix(0, nrow=n0)
+
+# Plot data along with f(X) for comparison
+plot(X, Y, ylim = c(-0.5, 0.1), bty='n', xlab = 'X', ylab = 'Y', main = 'dataset43')
+
+# Epanechnkiov Kernel 
+for(i in c(1:n0)){
+  y0[i] = kernel_smoothing(x0[i], X, Y, epanechnikov_kernel, constant_bandwidth, 0.25)
+}
+lines(x0, y0, col = 'green', lwd = 2)
+
+
+
+
+local_linear_regression = function(x0, X, Y, K, h, lambda = 2){
+  # Inputs
+  #   x0 - input to be predicted
+  #   X - matrix of training inputs (n x p)
+  #   Y - matrix of training outputs (n x 1)
+  #   k - kernel function
+  #   h - bandwidth function
+  #
+  # Outputs
+  #   predicted y0 value   
+  
+  n = length(Y)
+  bandwidth = h(lambda, x0, X)
+  w = K(abs(x0 - X)/bandwidth)
+  if(sum(w > 0) < 3){
+    stop('local regression requires at least 2 non-zero weights')
+  }
+  w = as.vector(w / sum(w))
+  W = diag(w)
+  X = cbind(matrix(1, nrow = n), X)
+  hatB = solve(t(X) %*% W %*% X) %*% t(X) %*% W %*% Y
+  return(c(1, x0) %*% hatB)
+}
+
+for(i in c(1:n0)){
+  y0[i] = local_linear_regression(x0[i], X, Y, epanechnikov_kernel, constant_bandwidth, 0.25)
+}
+lines(x0, y0, col = 'red', lwd = 2)
+
+
+
+#########
+### South African Heart Disease Example - Local Logistic Regression ###
+#########
+
+require(glmnet)
+
+mydata = read.csv('SAheart-data.csv', header=T)
+head(mydata)
+
+n = dim(mydata)[1]
+
+nFolds = 5
+folds = make_folds(mydata$chd, nFolds, stratified = TRUE)
+
+lambda_values = seq(from = 1, to = 5, by = 0.2)
+n_lambda_values = length(lambda_values)
+accuracy = matrix(0, nrow = nFolds, ncol = n_lambda_values)
+
+for(fold in 1:nFolds){
+  
+  training_data = mydata[-folds[[fold]],]
+  testing_data = mydata[folds[[fold]],]
+  
+  n_training = dim(training_data)[1]
+  n_testing = dim(testing_data)[1]
+  
+  # Define training and testing data matrices
+  trainingX = model.matrix(chd ~ sbp, data=training_data) 
+  trainingY = matrix(training_data$chd, nrow = n_training)
+  
+  testingX = model.matrix(chd ~ sbp, data=testing_data)
+  testingY = testing_data$chd
+  
+  testingX[,2] = (testingX[,2] - mean(trainingX[,2])) / sd(trainingX[,2])
+  trainingX[,2] = (trainingX[,2] - mean(trainingX[,2])) / sd(trainingX[,2])
+  
+  for(i in 1:n_lambda_values){
+    
+    lambda = lambda_values[i]
+    testingYhat = matrix(0, nrow = n_testing)
+    for(j in c(1:n_testing)){
+      w = tricube_kernel(abs(testingX[j, 2] - trainingX[, 2])/lambda)
+      w = as.vector(w / sum(w))
+      fit = glmnet(trainingX, trainingY, family="binomial", lambda = 0, weights = w)
+      testingYhat[j] = predict(fit, newx=matrix(testingX[j,], nrow = 1), type = 'class')
+    }
+    accuracy[fold, i] = mean(testingY == testingYhat)
+  }
+}
+
+accuracy = apply(accuracy, 2, mean)
+plot(lambda_values, accuracy)
+
+lambda = lambda_values[which.max(accuracy)]
+
+# Create input and output variables
+Y = mydata$chd
+X = model.matrix(chd ~ sbp, data=mydata)
+
+X[,2] = (X[,2] - mean(X[,2])) / sd(X[,2])
+yHat = matrix(0, nrow = n)
+
+for(i in c(1:n)){
+  w = tricube_kernel(abs(X[i,2] - X[,2])/lambda)
+  w = as.vector(w / sum(w))
+  fit = glmnet(X, Y, family="binomial", lambda = 0, weights = w)
+  yHat[i] = predict(fit, matrix(X[i,], nrow = 1), type = 'response')
+}
+
+plot(X[,2], yHat)
 # Cross-validation------------------------------------------------------------------------
 
 make_folds = function(Y, nFolds, stratified = FALSE, seed = 0){
