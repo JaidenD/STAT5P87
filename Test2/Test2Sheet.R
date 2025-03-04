@@ -388,6 +388,7 @@ lines(x0, y0[,3], col = 'forestgreen', lwd = 2)
 
 points(iris$Petal.Length, indicatorY[,1], col = 'red', cex = 1, lwd = 2)
 points(iris$Petal.Length, indicatorY[,2], col = 'dodgerblue3', cex = 1, lwd = 2)
+points(iris$Petal.Length, indicatorY[,3], col = 'forestgreen', cex = 1, lwd = 2)
 
 
 
