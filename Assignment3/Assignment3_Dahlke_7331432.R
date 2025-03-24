@@ -1,0 +1,527 @@
+######################################################
+###     Q1      ######################################
+######################################################
+
+# Load the data
+data = read.csv("simple-classification-data.csv")
+head(data)
+
+# a)
+
+plot(data$x1, data$x2, pch=19)
+
+shade_region <- function(x1_min, x1_max, x2_min, x2_max, color, alpha=0.3) {
+  # Create polygon vertices for the region
+  polygon(
+    x = c(x1_min, x1_max, x1_max, x1_min),
+    y = c(x2_min, x2_min, x2_max, x2_max),
+    col = adjustcolor(color, alpha.f=alpha),
+    border = NA
+  )
+}
+
+minx1 = min(data$x1)
+minx2 = min(data$x2)
+maxx1 = max(data$x1)
+maxx2 = max(data$x2)
+
+# Shade the four regions
+# R1
+shade_region(minx1-1, 0.5, minx2-1, 1, "lightblue")
+# R2
+shade_region(minx1-1, 0.5, 1, maxx2+1, "lightgreen")
+# R3
+shade_region(0.5, maxx1+1, minx2-1, 1, "salmon")
+# R4
+shade_region(0.5, maxx1+1, 1, maxx2+1, "lightyellow")
+
+# Add region labels
+text(0.25, 0.5, "R1", cex=1.5)
+text(0.25, 1.25, "R2", cex=1.5)
+text(0.75, 0.5, "R3", cex=1.5)
+text(0.75, 1.25, "R4", cex=1.5)
+
+#b)
+# Define region for each point
+data$region = ifelse(data$x1 <= 0.5 & data$x2 <= 1, 1,
+                     ifelse(data$x1 <= 0.5 & data$x2 > 1, 2,
+                            ifelse(data$x1 > 0.5 & data$x2 <= 1, 3, 4)))
+
+# Find most common class in each region
+region_class = numeric(4)
+for(i in 1:4) {
+  region_data = data[data$region == i, ]
+  if(nrow(region_data) > 0) {
+    region_class[i] = as.numeric(names(sort(table(region_data$y), decreasing=TRUE)[1]))
+  } else {
+    region_class[i] = 0  # default if region is empty
+  }
+}
+
+# Predict based on region
+data$pred_constant = region_class[data$region]
+
+# Calculate accuracy
+constant_accuracy = mean(data$pred_constant == data$y) # Accuracy = 0.69 
+
+#c)
+data$b1 = data$x1                 # linear term for x1
+data$b2 = data$x2                 # linear term for x2
+data$b3 = pmax(0, data$x1 - 0.5)  # hinge function at x1=0.5
+data$b4 = pmax(0, data$x2 - 1)    # hinge function at x2=1
+
+# Fit linear model 
+model = lm(y ~ b1 + b2 + b3 + b4, data=data)  # -1 removes the intercept as we have b0
+
+# Print model coefficients to see the slope changes
+print(summary(model))
+
+# Make predictions (round to nearest integer for classification if y is categorical)
+data$pred = round(predict(model, data))
+
+# Calculate accuracy
+accuracy = mean(data$pred == data$y) #0.86
+
+
+
+######################################################
+###     Q2      ######################################
+######################################################
+set.seed(123)
+
+# Create evenly spaced grid between 0 and 1 for training data
+n_train = 100
+x_train = seq(0, 1, length.out = n_train)
+
+# Simulate training Y based on the given model:
+# Y = 3X^3 - 5X^2 + X - 3 + N(0, 1)
+true_function = function(x) {
+  3 * x^3 - 5 * x^2 + x - 3
+}
+
+# Add noise N(0,1)
+y_train = true_function(x_train) + rnorm(n_train, 0, 1)
+
+# Create dense grid for plotting
+x_grid = seq(0, 1, length.out = 1000)
+y_true = true_function(x_grid)
+
+# Define knots for natural spline and boundaries
+ns_knots = c(0.1, 0.26, 0.42, 0.58, 0.74, 0.9)
+n_knots = length(ns_knots)
+knot_min = min(ns_knots)
+knot_max = max(ns_knots)
+
+# Helper function for truncated cubic power
+d_function = function(x, knot) {
+  pmax(0, (x - knot))^3
+}
+
+# Function to run simulation multiple times and compute variance
+run_simulation = function(n_sims = 100) {
+  # Initialize matrices to store predictions
+  linear_preds = matrix(0, nrow = n_sims, ncol = length(x_grid))
+  cubic_preds = matrix(0, nrow = n_sims, ncol = length(x_grid))
+  cubic_spline_preds = matrix(0, nrow = n_sims, ncol = length(x_grid))
+  natural_spline_preds = matrix(0, nrow = n_sims, ncol = length(x_grid))
+  
+  # Run simulations
+  for (i in 1:n_sims) {
+    # Generate new training data with same X but different noise
+    y_sim = true_function(x_train) + rnorm(n_train, 0, 1)
+    
+    # Linear model
+    linear_model = lm(y_sim ~ x_train)
+    linear_preds[i,] = predict(linear_model, newdata = data.frame(x_train = x_grid))
+    
+    # Cubic
+    cubic_model = lm(y_sim ~ poly(x_train, 3, raw = TRUE))
+    cubic_preds[i,] = predict(cubic_model, newdata = data.frame(x_train = x_grid))
+    
+    # Cubic spline with knots at 1/3 and 2/3
+    x_basis = cbind(1, x_train, x_train^2, x_train^3, 
+                    pmax(0, (x_train - 1/3))^3, 
+                    pmax(0, (x_train - 2/3))^3)
+    cubic_spline_model = lm(y_sim ~ x_basis - 1)
+    x_pred_basis = cbind(1, x_grid, x_grid^2, x_grid^3, 
+                         pmax(0, (x_grid - 1/3))^3, 
+                         pmax(0, (x_grid - 2/3))^3)
+    cubic_spline_preds[i,] = x_pred_basis %*% cubic_spline_model$coefficients
+    
+    # Natural spline basis for training data
+    ns_basis_train = matrix(0, nrow = length(x_train), ncol = n_knots)
+    for (j in 1:n_knots) {
+      alpha_j = (knot_max - ns_knots[j]) / (knot_max - knot_min)
+      beta_j = (ns_knots[j] - knot_min) / (knot_max - knot_min)
+      ns_basis_train[, j] = d_function(x_train, ns_knots[j]) -
+        alpha_j * d_function(x_train, knot_max) -
+        beta_j * d_function(x_train, knot_min)
+    }
+    colnames(ns_basis_train) = paste0("ns_basis", 1:n_knots)
+    ns_train_df = data.frame(x_train = x_train, ns_basis_train)
+    
+    # Fit natural spline model
+    ns_model = lm(y_sim ~ ., data = ns_train_df)
+    
+    # Natural spline basis for prediction
+    ns_basis_pred = matrix(0, nrow = length(x_grid), ncol = n_knots)
+    for (j in 1:n_knots) {
+      alpha_j = (knot_max - ns_knots[j]) / (knot_max - knot_min)
+      beta_j = (ns_knots[j] - knot_min) / (knot_max - knot_min)
+      ns_basis_pred[, j] = d_function(x_grid, ns_knots[j]) -
+        alpha_j * d_function(x_grid, knot_max) -
+        beta_j * d_function(x_grid, knot_min)
+    }
+    colnames(ns_basis_pred) = paste0("ns_basis", 1:n_knots)
+    ns_pred_df = data.frame(x_train = x_grid, ns_basis_pred)
+    
+    # Predict
+    natural_spline_preds[i,] = predict(ns_model, newdata = ns_pred_df)
+  }
+  
+  # Compute pointwise variances
+  linear_var = apply(linear_preds, 2, var)
+  cubic_var = apply(cubic_preds, 2, var)
+  cubic_spline_var = apply(cubic_spline_preds, 2, var)
+  natural_spline_var = apply(natural_spline_preds, 2, var)
+  
+  return(list(
+    x = x_grid,
+    linear_var = linear_var,
+    cubic_var = cubic_var,
+    cubic_spline_var = cubic_spline_var,
+    natural_spline_var = natural_spline_var
+  ))
+}
+
+# Run the simulation
+results = run_simulation(n_sims = 100)
+
+# Create plot
+max_y = max(c(results$cubic_spline_var, results$natural_spline_var), na.rm = TRUE)
+
+plot(results$x, results$linear_var, type = "l", col = "orange", lwd = 2,
+     xlab = "X", ylab = "Pointwise Variances",
+     ylim = c(0, max_y * 1.1),
+     main = "Pointwise Variance of Different Spline Models")
+lines(results$x, results$cubic_var, col = "red", lwd = 2)
+lines(results$x, results$cubic_spline_var, col = "green", lwd = 2)
+lines(results$x, results$natural_spline_var, col = "blue", lwd = 2)
+
+# Add legend
+legend("topleft", 
+       legend = c("Linear", "Cubic", "Cubic Spline", "Natural Spline"),
+       col = c("orange", "red", "green", "blue"),
+       lty = c(1, 2, 1, 4), 
+       lwd = 2)
+
+
+
+######################################################
+###     Q3      ######################################
+######################################################
+# Part a
+kernel_smoothing = function(x0, X, Y, K, h, lambda = 2){
+  # Inputs
+  #   x0 - input to be predicted
+  #   X - matrix of training inputs (n x p)
+  #   Y - matrix of training outputs (n x 1)
+  #   k - kernel function
+  #   h - bandwidth function
+  #
+  # Outputs
+  #   predicted y0 value
+  
+  distances = abs(x0 - X)
+  bandwidth = h(lambda, x0, X)
+  
+  # Case 1: bandwidth is zero
+  if(bandwidth == 0){
+    # Use mean of points that have the same x-value
+    return(mean(Y[which(X == x0)]))
+  }
+  
+  # Compute kernel weights
+  w = K(distances/bandwidth)
+  
+  # Case 2: sum of weights is zero
+  if(sum(w) == 0){
+    # Identify boundary points
+    return(mean(Y[which(distances/bandwidth == 1)]))
+  }
+  
+  # Base case
+  return(sum(w*Y) / sum(w))
+}
+
+# Part b
+data = read.csv("concrete-data.csv")
+x = data$age
+y = data$strength
+make_folds = function(Y, nFolds, stratified = FALSE, seed = 0){
+  # K-Fold cross validation
+  # Input:
+  #   Y (either sample size, or vector of outputs)
+  #   stratified (boolean): whether the folds should 
+  #     be stratified. If TRUE then Y should be a vector of outputs
+  # Output: list of vectors of fold indices
+  if(stratified & length(Y) == 1){
+    stop('For stratified folds, Y must be a vector of outputs')
+  }
+  n = ifelse(length(Y) > 1, length(Y), Y)
+  index = c(1:n)
+  if(stratified){
+    Y = factor(Y)
+    classes = levels(Y)
+    nClasses = length(classes)
+    if(nClasses == 1){
+      stop('stratified requires more than one class')
+    }
+    classfolds = list()
+    for(class in 1:nClasses){
+      classfolds[[class]] = list()
+      classIndex = index[Y == classes[class]]
+      n_class = sum(Y == classes[class])
+      n_per_fold = floor(n_class / nFolds)
+      shuffled_index = sample(classIndex)
+      for(fold in c(1:(nFolds - 1))){
+        classfolds[[class]][[fold]] = shuffled_index[c((1 + (fold - 1) * n_per_fold):(fold * n_per_fold))]
+      }
+      classfolds[[class]][[nFolds]] = shuffled_index[c(((nFolds - 1)*n_per_fold + 1):n_class)]
+    }
+    folds = list()
+    for(fold in 1:nFolds){
+      folds[[fold]] = classfolds[[1]][[fold]]
+      for(class in 2:nClasses){
+        folds[[fold]] = c(folds[[fold]], classfolds[[class]][[fold]])
+      }
+    }
+  }else{
+    folds = list()
+    n_per_fold = floor(n / nFolds)
+    shuffled_index = sample(index)
+    for(fold in c(1:(nFolds - 1))){
+      folds[[fold]] = shuffled_index[c((1 + (fold - 1) * n_per_fold):(fold * n_per_fold))]
+    }  
+    folds[[nFolds]] = shuffled_index[c(((nFolds - 1)*n_per_fold + 1):n)]
+  }
+  return(folds)
+}
+
+t = seq(from=-2, to=2, by = 0.01)
+
+gaussian_kernel = function(t){
+  # Input: t - real number
+  # Output: D(t) - real number, where D() is the Gaussian kernel
+  return((2*pi)^(-1/2) * exp(-t^2/2))
+}
+epanechnikov_kernel = function(t){
+  # Input: t - real number
+  # Output: D(t) - real number, where D() is the Epanechnikov kernel
+  return(as.integer(abs(t) <= 1) * (3/4) * (1 - t^2))
+}
+
+adaptive_bandwidth = function(lambda, x0, X){
+  # Input:
+  #   lambda - positive integer, number of nearest neighbours
+  #   x0 - scalar, point where we will compute bandwidth
+  #   X - vector of training observations
+  #
+  # Output: the distance from x0 to its lambda^th nearest neighbour in X
+  N = length(X)
+  d = matrix(0, nrow = N)
+  for(i in c(1:N)){
+    d[i] = abs(x0 - X[i])
+  } 
+  d_sorted = sort(d)
+  return(d_sorted[lambda])
+}
+
+cv_kernel_smoothing = function(x, y, folds, kernel_fn, bandwidth_fn, lambda){
+  mse_per_fold = numeric(length(folds))
+  
+  for(i in 1:10){
+    test_idx  = folds[[i]]
+    train_idx = setdiff(seq_along(x), test_idx)
+    
+    xtrain = x[train_idx]
+    ytrain = y[train_idx]
+    xtest  = x[test_idx]
+    ytest  = y[test_idx]
+    
+    # Predictions on the test fold
+    ypred = sapply(xtest, function(x0) {
+      kernel_smoothing(x0, xtrain, ytrain, kernel_fn, bandwidth_fn, lambda)
+    })
+    
+    # Mean squared error for this fold
+    mse_per_fold[i] = mean((ytest - ypred)^2)
+  }
+  return(mean(mse_per_fold))
+}
+
+set.seed(1)
+foldNum = 10
+folds = make_folds(length(y), nFolds = foldNum)
+
+# Find optimal lambda
+lambda_candidates = seq(1,29,1)
+
+kernel_list = list(gaussian = gaussian_kernel, epanechnikov = epanechnikov_kernel)
+results = list()
+
+# Loop over the kernels
+for(kernel_name in names(kernel_list)){
+  kernel_fn = kernel_list[[kernel_name]]
+  
+  best_lambda = NA
+  best_mse    = Inf
+  
+  # Loop over lambda candidates for current kernel
+  for(lambda in lambda_candidates) {
+    mse_cv = cv_kernel_smoothing(
+      x, y, folds,
+      kernel_fn,
+      adaptive_bandwidth,
+      lambda
+    )
+    if(mse_cv < best_mse) {
+      best_mse    = mse_cv
+      best_lambda = lambda
+    }
+  }
+  
+  results[[kernel_name]] = list(kernel_fn = kernel_fn,
+                                best_lambda = best_lambda,
+                                best_mse = best_mse)
+}
+best_kernel_name = names(results)[which.min(sapply(results, function(res) res$best_mse))] # epanechnikov
+best_lambda_overall = results[[best_kernel_name]]$best_lambda # 18
+best_mse_overall    = results[[best_kernel_name]]$best_mse # 167.6262
+
+
+# Part c
+
+x_grid = seq(min(x), max(x), length.out = 200)
+
+# Compute predicted y-values on grid
+y_hat_grid <- sapply(x_grid, function(x0) {
+  kernel_smoothing(
+    x0,
+    x, 
+    y,
+    epanechnikov_kernel,
+    adaptive_bandwidth,
+    best_lambda
+  )
+})
+
+plot(
+  x, y,
+  pch  = 19,
+  col  = "blue",
+  xlab = "Age",
+  ylab = "Strength",
+  main = paste("Epanechnikov Kernel Smoothing with \u03BB = 18")
+)
+lines(
+  x_grid, y_hat_grid,
+  col = "red",
+  lwd = 2
+)
+legend(
+  "topleft",
+  legend = c("Data", "Fitted Curve"),
+  pch    = c(19, NA),
+  col    = c("blue", "red"),
+  lty    = c(NA, 1),
+  lwd    = c(NA, 2)
+)
+
+######################################################
+###     Q4      ######################################
+######################################################
+data = read.csv("SAheart-data.csv")
+
+# Cubic function for spline construction
+d_function = function(x, knot) {
+  pmax(0, x - knot)^3
+}
+
+# Build natural spline basis
+build_ns_basis = function(x, ns_knots, knot_min, knot_max, varname = "x") {
+  n_knots = length(ns_knots)
+  ns_mat  = matrix(0, nrow = length(x), ncol = n_knots)
+  for (j in 1:n_knots) {
+    alpha = (knot_max - ns_knots[j]) / (knot_max - knot_min)
+    beta  = (ns_knots[j] - knot_min) / (knot_max - knot_min)
+    ns_mat[, j] = d_function(x, ns_knots[j]) -
+      alpha * d_function(x, knot_max) -
+      beta  * d_function(x, knot_min)
+  }
+  colnames(ns_mat) = paste0(varname, "_ns", 1:n_knots)
+  return(ns_mat)
+}
+
+# Candidate predictors and precompute spline bases
+vars = c("sbp", "tobacco", "ldl", "age")
+spline_bases = list()
+for (v in vars) {
+  x = data[[v]]
+  knot_min = min(x)
+  knot_max = max(x)
+  # 5 equally spaced knots, 3 interior, 2 boundary
+  ns_knots = seq(knot_min, knot_max, length.out = 5)[2:4]
+  spline_bases[[v]] = build_ns_basis(x, ns_knots, knot_min, knot_max, varname = v)
+}
+
+# Forward selection by AIC for logistic regression
+selected_vars = c()
+current_aic   = Inf
+best_model    = NULL
+improvement   = TRUE
+
+while (improvement && length(selected_vars) < length(vars)) {
+  improvement = FALSE
+  best_aic_step = current_aic
+  best_candidate = NULL
+  
+  # Try adding each variable not yet selected
+  for (candidate in setdiff(vars, selected_vars)) {
+    df_temp = data.frame(chd = data$chd)
+    if (length(selected_vars) > 0) {
+      for (sv in selected_vars) {
+        df_temp = cbind(df_temp, spline_bases[[sv]])
+      }
+    }
+    df_temp = cbind(df_temp, spline_bases[[candidate]])
+    
+    model_temp = glm(chd ~ ., data = df_temp, family = binomial)
+    aic_temp = AIC(model_temp)
+    if (aic_temp < best_aic_step) {
+      best_aic_step = aic_temp
+      best_candidate = candidate
+    }
+  }
+  
+  if (!is.null(best_candidate)) {
+    selected_vars = c(selected_vars, best_candidate)
+    current_aic = best_aic_step
+    improvement = TRUE
+    
+    df_final = data.frame(chd = data$chd)
+    for (sv in selected_vars) {
+      df_final = cbind(df_final, spline_bases[[sv]])
+    }
+    best_model = glm(chd ~ ., data = df_final, family = binomial)
+  }
+}
+
+# Report selected variables, final AIC, and training accuracy
+pred_probs = predict(best_model, type = "response")
+pred_class = ifelse(pred_probs > 0.5, 1, 0)
+train_acc  = mean(pred_class == data$chd)
+
+selected_vars # "age"     "ldl"     "tobacco"
+AIC(best_model) # 521.164
+train_acc # 0.7142857

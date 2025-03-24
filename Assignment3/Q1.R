@@ -1,230 +1,527 @@
+######################################################
+###     Q1      ######################################
+######################################################
+
+# Load the data
 data = read.csv("simple-classification-data.csv")
 head(data)
 
-# Part a
-# Define the regions as a list of functions
-regions <- list(
-  R1 = function(x1, x2) x1 <= 0.5 & x2 <= 1,
-  R2 = function(x1, x2) x1 <= 0.5 & x2 > 1,
-  R3 = function(x1, x2) x1 > 0.5 & x2 <= 1,
-  R4 = function(x1, x2) x1 > 0.5 & x2 > 1
-)
+# a)
 
-# Function to find region centers
-find_region_center <- function(region_func, x1_range, x2_range) {
-  points <- expand.grid(x1 = x1_range, x2 = x2_range)
-  in_region <- apply(points, 1, function(p) region_func(p[1], p[2]))
-  region_points <- points[in_region, ]
-  return(c(mean(region_points$x1), mean(region_points$x2)))
+# plot(data$x1, data$x2, col=data$y+1, pch=19)
+
+shade_region <- function(x1_min, x1_max, x2_min, x2_max, color, alpha=0.3) {
+  # Create polygon vertices for the region
+  polygon(
+    x = c(x1_min, x1_max, x1_max, x1_min),
+    y = c(x2_min, x2_min, x2_max, x2_max),
+    col = adjustcolor(color, alpha.f=alpha),
+    border = NA
+  )
 }
 
-# Create the plot
-plot(c(0, 1), c(0, 2), type = "n", xlab = "x1", ylab = "x2",
-     main = "Two-Dimensional Spline Regions")
+minx1 = min(data$x1)
+minx2 = min(data$x2)
+maxx1 = max(data$x1)
+maxx2 = max(data$x2)
 
-# Determine boundaries from region definitions
-# Boundary at x1 = 0.5 (where R1/R2 changes to R3/R4)
-x2_vals <- seq(0, 2, by = 0.01)
-lines(rep(0.5, length(x2_vals)), x2_vals, lty = 2)
+# Shade the four regions
+# R1
+shade_region(minx1-1, 0.5, minx2-1, 1, "lightblue")
+# R2
+shade_region(minx1-1, 0.5, 1, maxx2+1, "lightgreen")
+# R3
+shade_region(0.5, maxx1+1, minx2-1, 1, "salmon")
+# R4
+shade_region(0.5, maxx1+1, 1, maxx2+1, "lightyellow")
 
-# Boundary at x2 = 1 (where R1/R3 changes to R2/R4)
-x1_vals <- seq(0, 1, by = 0.01)
-lines(x1_vals, rep(1, length(x1_vals)), lty = 2)
+# Add region labels
+text(0.25, 0.5, "R1", cex=1.5)
+text(0.25, 1.25, "R2", cex=1.5)
+text(0.75, 0.5, "R3", cex=1.5)
+text(0.75, 1.25, "R4", cex=1.5)
 
-# Find centers and add labels for each region
-# Define sampling ranges for each region
-region_ranges <- list(
-  R1 = list(x1 = seq(0, 0.5, by = 0.1), x2 = seq(0, 1, by = 0.1)),
-  R2 = list(x1 = seq(0, 0.5, by = 0.1), x2 = seq(1, 2, by = 0.1)),
-  R3 = list(x1 = seq(0.5, 1, by = 0.1), x2 = seq(0, 1, by = 0.1)),
-  R4 = list(x1 = seq(0.5, 1, by = 0.1), x2 = seq(1, 2, by = 0.1))
-)
+#b)
+# Define region for each point
+data$region = ifelse(data$x1 <= 0.5 & data$x2 <= 1, 1,
+                     ifelse(data$x1 <= 0.5 & data$x2 > 1, 2,
+                            ifelse(data$x1 > 0.5 & data$x2 <= 1, 3, 4)))
 
-# Add labels for each region
-for (i in 1:4) {
-  region_name <- paste0("R", i)
-  center <- find_region_center(
-    regions[[region_name]], 
-    region_ranges[[region_name]]$x1, 
-    region_ranges[[region_name]]$x2
-  )
-  text(center[1], center[2], region_name)
+# Find most common class in each region
+region_class = numeric(4)
+for(i in 1:4) {
+  region_data = data[data$region == i, ]
+  if(nrow(region_data) > 0) {
+    region_class[i] = as.numeric(names(sort(table(region_data$y), decreasing=TRUE)[1]))
+  } else {
+    region_class[i] = 0  # default if region is empty
+  }
+}
+
+# Predict based on region
+data$pred_constant = region_class[data$region]
+
+# Calculate accuracy
+constant_accuracy = mean(data$pred_constant == data$y) # Accuracy = 0.69 
+
+#c)
+data$b1 = data$x1                 # linear term for x1
+data$b2 = data$x2                 # linear term for x2
+data$b3 = pmax(0, data$x1 - 0.5)  # hinge function at x1=0.5
+data$b4 = pmax(0, data$x2 - 1)    # hinge function at x2=1
+
+# Fit linear model 
+model = lm(y ~ b1 + b2 + b3 + b4, data=data)  # -1 removes the intercept as we have b0
+
+# Print model coefficients to see the slope changes
+print(summary(model))
+
+# Make predictions (round to nearest integer for classification if y is categorical)
+data$pred = round(predict(model, data))
+
+# Calculate accuracy
+accuracy = mean(data$pred == data$y) #0.86
+
+
+
+######################################################
+###     Q2      ######################################
+######################################################
+set.seed(123)
+
+# Create evenly spaced grid between 0 and 1 for training data
+n_train = 100
+x_train = seq(0, 1, length.out = n_train)
+
+# Simulate training Y based on the given model:
+# Y = 3X^3 - 5X^2 + X - 3 + N(0, 1)
+true_function = function(x) {
+  3 * x^3 - 5 * x^2 + x - 3
+}
+
+# Add noise N(0,1)
+y_train = true_function(x_train) + rnorm(n_train, 0, 1)
+
+# Create dense grid for plotting
+x_grid = seq(0, 1, length.out = 1000)
+y_true = true_function(x_grid)
+
+# Define knots for natural spline and boundaries
+ns_knots = c(0.1, 0.26, 0.42, 0.58, 0.74, 0.9)
+n_knots = length(ns_knots)
+knot_min = min(ns_knots)
+knot_max = max(ns_knots)
+
+# Helper function for truncated cubic power
+d_function = function(x, knot) {
+  pmax(0, (x - knot))^3
+}
+
+# Function to run simulation multiple times and compute variance
+run_simulation = function(n_sims = 100) {
+  # Initialize matrices to store predictions
+  linear_preds = matrix(0, nrow = n_sims, ncol = length(x_grid))
+  cubic_preds = matrix(0, nrow = n_sims, ncol = length(x_grid))
+  cubic_spline_preds = matrix(0, nrow = n_sims, ncol = length(x_grid))
+  natural_spline_preds = matrix(0, nrow = n_sims, ncol = length(x_grid))
+  
+  # Run simulations
+  for (i in 1:n_sims) {
+    # Generate new training data with same X but different noise
+    y_sim = true_function(x_train) + rnorm(n_train, 0, 1)
+    
+    # Linear model
+    linear_model = lm(y_sim ~ x_train)
+    linear_preds[i,] = predict(linear_model, newdata = data.frame(x_train = x_grid))
+    
+    # Cubic
+    cubic_model = lm(y_sim ~ poly(x_train, 3, raw = TRUE))
+    cubic_preds[i,] = predict(cubic_model, newdata = data.frame(x_train = x_grid))
+    
+    # Cubic spline with knots at 1/3 and 2/3
+    x_basis = cbind(1, x_train, x_train^2, x_train^3, 
+                    pmax(0, (x_train - 1/3))^3, 
+                    pmax(0, (x_train - 2/3))^3)
+    cubic_spline_model = lm(y_sim ~ x_basis - 1)
+    x_pred_basis = cbind(1, x_grid, x_grid^2, x_grid^3, 
+                         pmax(0, (x_grid - 1/3))^3, 
+                         pmax(0, (x_grid - 2/3))^3)
+    cubic_spline_preds[i,] = x_pred_basis %*% cubic_spline_model$coefficients
+    
+    # Natural spline basis for training data
+    ns_basis_train = matrix(0, nrow = length(x_train), ncol = n_knots)
+    for (j in 1:n_knots) {
+      alpha_j = (knot_max - ns_knots[j]) / (knot_max - knot_min)
+      beta_j = (ns_knots[j] - knot_min) / (knot_max - knot_min)
+      ns_basis_train[, j] = d_function(x_train, ns_knots[j]) -
+        alpha_j * d_function(x_train, knot_max) -
+        beta_j * d_function(x_train, knot_min)
+    }
+    colnames(ns_basis_train) = paste0("ns_basis", 1:n_knots)
+    ns_train_df = data.frame(x_train = x_train, ns_basis_train)
+    
+    # Fit natural spline model
+    ns_model = lm(y_sim ~ ., data = ns_train_df)
+    
+    # Natural spline basis for prediction
+    ns_basis_pred = matrix(0, nrow = length(x_grid), ncol = n_knots)
+    for (j in 1:n_knots) {
+      alpha_j = (knot_max - ns_knots[j]) / (knot_max - knot_min)
+      beta_j = (ns_knots[j] - knot_min) / (knot_max - knot_min)
+      ns_basis_pred[, j] = d_function(x_grid, ns_knots[j]) -
+        alpha_j * d_function(x_grid, knot_max) -
+        beta_j * d_function(x_grid, knot_min)
+    }
+    colnames(ns_basis_pred) = paste0("ns_basis", 1:n_knots)
+    ns_pred_df = data.frame(x_train = x_grid, ns_basis_pred)
+    
+    # Predict
+    natural_spline_preds[i,] = predict(ns_model, newdata = ns_pred_df)
+  }
+  
+  # Compute pointwise variances
+  linear_var = apply(linear_preds, 2, var)
+  cubic_var = apply(cubic_preds, 2, var)
+  cubic_spline_var = apply(cubic_spline_preds, 2, var)
+  natural_spline_var = apply(natural_spline_preds, 2, var)
+  
+  return(list(
+    x = x_grid,
+    linear_var = linear_var,
+    cubic_var = cubic_var,
+    cubic_spline_var = cubic_spline_var,
+    natural_spline_var = natural_spline_var
+  ))
+}
+
+# Run the simulation
+results = run_simulation(n_sims = 100)
+
+# Create plot
+max_y = max(c(results$cubic_spline_var, results$natural_spline_var), na.rm = TRUE)
+
+plot(results$x, results$linear_var, type = "l", col = "orange", lwd = 2,
+     xlab = "X", ylab = "Pointwise Variances",
+     ylim = c(0, max_y * 1.1),
+     main = "Pointwise Variance of Different Spline Models")
+lines(results$x, results$cubic_var, col = "red", lwd = 2)
+lines(results$x, results$cubic_spline_var, col = "green", lwd = 2)
+lines(results$x, results$natural_spline_var, col = "blue", lwd = 2)
+
+# Add legend
+legend("topleft", 
+       legend = c("Linear", "Cubic", "Cubic Spline", "Natural Spline"),
+       col = c("orange", "red", "green", "blue"),
+       lty = c(1, 2, 1, 4), 
+       lwd = 2)
+
+
+
+######################################################
+###     Q3      ######################################
+######################################################
+# Part a
+kernel_smoothing = function(x0, X, Y, K, h, lambda = 2){
+  # Inputs
+  #   x0 - input to be predicted
+  #   X - matrix of training inputs (n x p)
+  #   Y - matrix of training outputs (n x 1)
+  #   k - kernel function
+  #   h - bandwidth function
+  #
+  # Outputs
+  #   predicted y0 value
+  
+  distances = abs(x0 - X)
+  bandwidth = h(lambda, x0, X)
+  
+  # Case 1: bandwidth is zero
+  if(bandwidth == 0){
+    # Use mean of points that have the same x-value
+    return(mean(Y[which(X == x0)]))
+  }
+  
+  # Compute kernel weights
+  w = K(distances/bandwidth)
+  
+  # Case 2: sum of weights is zero
+  if(sum(w) == 0){
+    # Identify boundary points
+    return(mean(Y[which(distances/bandwidth == 1)]))
+  }
+  
+  # Base case
+  return(sum(w*Y) / sum(w))
 }
 
 # Part b
-get_region <- function(x1, x2) {
-  for (i in 1:4) {
-    region_name <- paste0("R", i)
-    if (regions[[region_name]](x1, x2)) {
-      return(i)
+data = read.csv("concrete-data.csv")
+x = data$age
+y = data$strength
+make_folds = function(Y, nFolds, stratified = FALSE, seed = 0){
+  # K-Fold cross validation
+  # Input:
+  #   Y (either sample size, or vector of outputs)
+  #   stratified (boolean): whether the folds should 
+  #     be stratified. If TRUE then Y should be a vector of outputs
+  # Output: list of vectors of fold indices
+  if(stratified & length(Y) == 1){
+    stop('For stratified folds, Y must be a vector of outputs')
+  }
+  n = ifelse(length(Y) > 1, length(Y), Y)
+  index = c(1:n)
+  if(stratified){
+    Y = factor(Y)
+    classes = levels(Y)
+    nClasses = length(classes)
+    if(nClasses == 1){
+      stop('stratified requires more than one class')
+    }
+    classfolds = list()
+    for(class in 1:nClasses){
+      classfolds[[class]] = list()
+      classIndex = index[Y == classes[class]]
+      n_class = sum(Y == classes[class])
+      n_per_fold = floor(n_class / nFolds)
+      shuffled_index = sample(classIndex)
+      for(fold in c(1:(nFolds - 1))){
+        classfolds[[class]][[fold]] = shuffled_index[c((1 + (fold - 1) * n_per_fold):(fold * n_per_fold))]
+      }
+      classfolds[[class]][[nFolds]] = shuffled_index[c(((nFolds - 1)*n_per_fold + 1):n_class)]
+    }
+    folds = list()
+    for(fold in 1:nFolds){
+      folds[[fold]] = classfolds[[1]][[fold]]
+      for(class in 2:nClasses){
+        folds[[fold]] = c(folds[[fold]], classfolds[[class]][[fold]])
+      }
+    }
+  }else{
+    folds = list()
+    n_per_fold = floor(n / nFolds)
+    shuffled_index = sample(index)
+    for(fold in c(1:(nFolds - 1))){
+      folds[[fold]] = shuffled_index[c((1 + (fold - 1) * n_per_fold):(fold * n_per_fold))]
+    }  
+    folds[[nFolds]] = shuffled_index[c(((nFolds - 1)*n_per_fold + 1):n)]
+  }
+  return(folds)
+}
+
+t = seq(from=-2, to=2, by = 0.01)
+
+gaussian_kernel = function(t){
+  # Input: t - real number
+  # Output: D(t) - real number, where D() is the Gaussian kernel
+  return((2*pi)^(-1/2) * exp(-t^2/2))
+}
+epanechnikov_kernel = function(t){
+  # Input: t - real number
+  # Output: D(t) - real number, where D() is the Epanechnikov kernel
+  return(as.integer(abs(t) <= 1) * (3/4) * (1 - t^2))
+}
+
+adaptive_bandwidth = function(lambda, x0, X){
+  # Input:
+  #   lambda - positive integer, number of nearest neighbours
+  #   x0 - scalar, point where we will compute bandwidth
+  #   X - vector of training observations
+  #
+  # Output: the distance from x0 to its lambda^th nearest neighbour in X
+  N = length(X)
+  d = matrix(0, nrow = N)
+  for(i in c(1:N)){
+    d[i] = abs(x0 - X[i])
+  } 
+  d_sorted = sort(d)
+  return(d_sorted[lambda])
+}
+
+cv_kernel_smoothing = function(x, y, folds, kernel_fn, bandwidth_fn, lambda){
+  mse_per_fold = numeric(length(folds))
+  
+  for(i in 1:10){
+    test_idx  = folds[[i]]
+    train_idx = setdiff(seq_along(x), test_idx)
+    
+    xtrain = x[train_idx]
+    ytrain = y[train_idx]
+    xtest  = x[test_idx]
+    ytest  = y[test_idx]
+    
+    # Predictions on the test fold
+    ypred = sapply(xtest, function(x0) {
+      kernel_smoothing(x0, xtrain, ytrain, kernel_fn, bandwidth_fn, lambda)
+    })
+    
+    # Mean squared error for this fold
+    mse_per_fold[i] = mean((ytest - ypred)^2)
+  }
+  return(mean(mse_per_fold))
+}
+
+set.seed(1)
+foldNum = 10
+folds = make_folds(length(y), nFolds = foldNum)
+
+# Find optimal lambda
+lambda_candidates = seq(1,29,1)
+
+kernel_list = list(gaussian = gaussian_kernel, epanechnikov = epanechnikov_kernel)
+results = list()
+
+# Loop over the kernels
+for(kernel_name in names(kernel_list)){
+  kernel_fn = kernel_list[[kernel_name]]
+  
+  best_lambda = NA
+  best_mse    = Inf
+  
+  # Loop over lambda candidates for current kernel
+  for(lambda in lambda_candidates) {
+    mse_cv = cv_kernel_smoothing(
+      x, y, folds,
+      kernel_fn,
+      adaptive_bandwidth,
+      lambda
+    )
+    if(mse_cv < best_mse) {
+      best_mse    = mse_cv
+      best_lambda = lambda
     }
   }
-  return(NA)  # Should not happen if regions cover all space
+  
+  results[[kernel_name]] = list(kernel_fn = kernel_fn,
+                                best_lambda = best_lambda,
+                                best_mse = best_mse)
+}
+best_kernel_name = names(results)[which.min(sapply(results, function(res) res$best_mse))]
+best_lambda_overall = results[[best_kernel_name]]$best_lambda
+best_mse_overall    = results[[best_kernel_name]]$best_mse
+
+
+# Part c
+
+x_grid = seq(min(x), max(x), length.out = 200)
+
+# Compute predicted y-values on grid
+y_hat_grid <- sapply(x_grid, function(x0) {
+  kernel_smoothing(
+    x0,
+    x, 
+    y,
+    epanechnikov_kernel,
+    adaptive_bandwidth,
+    best_lambda
+  )
+})
+
+plot(
+  x, y,
+  pch  = 19,
+  col  = "blue",
+  xlab = "Age",
+  ylab = "Strength",
+  main = paste("Epanechnikov Kernel Smoothing with \u03BB = 18")
+)
+lines(
+  x_grid, y_hat_grid,
+  col = "red",
+  lwd = 2
+)
+legend(
+  "topleft",
+  legend = c("Data", "Fitted Curve"),
+  pch    = c(19, NA),
+  col    = c("blue", "red"),
+  lty    = c(NA, 1),
+  lwd    = c(NA, 2)
+)
+
+######################################################
+###     Q4      ######################################
+######################################################
+data = read.csv("SAheart-data.csv")
+
+# Cubic function for spline construction
+d_function = function(x, knot) {
+  pmax(0, x - knot)^3
 }
 
-# Assign regions to all data points
-data$region <- mapply(get_region, data$x1, data$x2)
+# Build natural spline basis
+build_ns_basis = function(x, ns_knots, knot_min, knot_max, varname = "x") {
+  n_knots = length(ns_knots)
+  ns_mat  = matrix(0, nrow = length(x), ncol = n_knots)
+  for (j in 1:n_knots) {
+    alpha = (knot_max - ns_knots[j]) / (knot_max - knot_min)
+    beta  = (ns_knots[j] - knot_min) / (knot_max - knot_min)
+    ns_mat[, j] = d_function(x, ns_knots[j]) -
+      alpha * d_function(x, knot_max) -
+      beta  * d_function(x, knot_min)
+  }
+  colnames(ns_mat) = paste0(varname, "_ns", 1:n_knots)
+  return(ns_mat)
+}
 
-# Fit piecewise constant model
-# For each region, use the majority class as the prediction
-region_models <- list()
-for (i in 1:4) {
-  region_data <- subset(data, region == i)
-  if (nrow(region_data) > 0) {
-    # Count occurrences of each class in this region
-    class_counts <- table(region_data$y)
-    # Use majority class as the model for this region
-    majority_class <- as.numeric(names(class_counts)[which.max(class_counts)])
-    region_models[[i]] <- majority_class
-  } else {
-    # If no data in a region, use overall majority class
-    region_models[[i]] <- as.numeric(names(which.max(table(data$y))))
+# Candidate predictors and precompute their spline bases
+vars = c("sbp", "tobacco", "ldl", "age")
+spline_bases = list()
+for (v in vars) {
+  x = data[[v]]
+  knot_min = min(x)
+  knot_max = max(x)
+  # 5 equally spaced knots, 3 interior, 2 boundary
+  ns_knots = seq(knot_min, knot_max, length.out = 5)[2:4]
+  spline_bases[[v]] = build_ns_basis(x, ns_knots, knot_min, knot_max, varname = v)
+}
+
+# Forward selection by AIC for logistic regression
+selected_vars = c()
+current_aic   = Inf
+best_model    = NULL
+improvement   = TRUE
+
+while (improvement && length(selected_vars) < length(vars)) {
+  improvement = FALSE
+  best_aic_step = current_aic
+  best_candidate = NULL
+  
+  # Try adding each variable not yet selected
+  for (candidate in setdiff(vars, selected_vars)) {
+    df_temp = data.frame(chd = data$chd)
+    if (length(selected_vars) > 0) {
+      for (sv in selected_vars) {
+        df_temp = cbind(df_temp, spline_bases[[sv]])
+      }
+    }
+    df_temp = cbind(df_temp, spline_bases[[candidate]])
+    
+    model_temp = glm(chd ~ ., data = df_temp, family = binomial)
+    aic_temp = AIC(model_temp)
+    if (aic_temp < best_aic_step) {
+      best_aic_step = aic_temp
+      best_candidate = candidate
+    }
+  }
+  
+  if (!is.null(best_candidate)) {
+    selected_vars = c(selected_vars, best_candidate)
+    current_aic = best_aic_step
+    improvement = TRUE
+    
+    df_final = data.frame(chd = data$chd)
+    for (sv in selected_vars) {
+      df_final = cbind(df_final, spline_bases[[sv]])
+    }
+    best_model = glm(chd ~ ., data = df_final, family = binomial)
   }
 }
 
-# Make predictions for all data points
-predict_y <- function(x1, x2) {
-  region <- get_region(x1, x2)
-  return(region_models[[region]])
-}
+# Report selected variables, final AIC, and training accuracy
+pred_probs = predict(best_model, type = "response")
+pred_class = ifelse(pred_probs > 0.5, 1, 0)
+train_acc  = mean(pred_class == data$chd)
 
-data$y_pred <- mapply(predict_y, data$x1, data$x2)
-
-# Calculate training accuracy
-accuracy <- mean(data$y == data$y_pred)
-cat("Training accuracy:", round(accuracy * 100, 2), "%\n")
-
-# Print the piecewise constant model
-cat("\nPiecewise Constant Model:\n")
-for (i in 1:4) {
-  cat("Region R", i, ": y = ", region_models[[i]], "\n", sep = "")
-}
-
-
-# Load the dataset if not already loaded
-if (!exists("data")) {
-  data = read.csv("simple-classification-data.csv")
-}
-
-# Function to create basis functions for the piecewise linear model
-# We need basis functions that allow for slope changes at x1 = 0.5 and x2 = 1
-create_basis_matrix = function(x1, x2) {
-  # Create basis matrix
-  # 1. Constant term
-  # 2. x1 term
-  # 3. x2 term
-  # 4. (x1 - 0.5)+ term (allows slope change at x1 = 0.5)
-  # 5. (x2 - 1)+ term (allows slope change at x2 = 1)
-  
-  # ReLU function (x)+ = max(0, x)
-  relu = function(x) pmax(0, x)
-  
-  # Create the basis matrix
-  X = cbind(
-    1,             # Constant term
-    x1,            # Linear term for x1
-    x2,            # Linear term for x2
-    relu(x1 - 0.5), # ReLU term for x1 at knot 0.5
-    relu(x2 - 1)    # ReLU term for x2 at knot 1
-  )
-  
-  colnames(X) = c("Constant", "x1", "x2", "x1_knot", "x2_knot")
-  return(X)
-}
-
-# Create the design matrix for our data
-X = create_basis_matrix(data$x1, data$x2)
-
-# Fit logistic regression model
-# For classification, we use logistic regression to fit a piecewise linear model
-model = glm(y ~ 0 + ., data = data.frame(y = data$y, X), family = binomial)
-
-# Print model coefficients
-cat("Piecewise Linear Model Coefficients:\n")
-print(coef(model))
-
-# Make predictions
-logits = predict(model, data.frame(X), type = "link")
-probs = 1 / (1 + exp(-logits))
-y_pred = ifelse(probs > 0.5, 1, 0)
-
-# Calculate training accuracy
-accuracy = mean(data$y == y_pred)
-cat("\nTraining accuracy:", round(accuracy * 100, 2), "%\n")
-
-# Visualize the decision boundary of the piecewise linear model
-# Create a grid of points
-grid_size = 100
-x1_grid = seq(0, 1, length.out = grid_size)
-x2_grid = seq(0, 2, length.out = grid_size)
-grid_points = expand.grid(x1 = x1_grid, x2 = x2_grid)
-
-# Create basis matrix for grid points
-X_grid = create_basis_matrix(grid_points$x1, grid_points$x2)
-
-# Predict probabilities for grid points
-grid_logits = predict(model, data.frame(X_grid), type = "link")
-grid_probs = 1 / (1 + exp(-grid_logits))
-grid_pred = ifelse(grid_probs > 0.5, 1, 0)
-
-# Reshape predictions for contour plot
-z = matrix(grid_pred, nrow = grid_size, ncol = grid_size)
-
-# Plot the data and decision boundary
-plot(data$x1, data$x2, col = ifelse(data$y == 1, "blue", "red"), 
-     pch = ifelse(y_pred == data$y, 16, 4),
-     main = "Piecewise Linear Model with Decision Boundary",
-     xlab = "x1", ylab = "x2")
-
-# Add decision boundary contour
-contour(x1_grid, x2_grid, z, levels = 0.5, add = TRUE, lwd = 2)
-
-# Add knot lines
-abline(v = 0.5, lty = 2)
-abline(h = 1, lty = 2)
-
-# Add legend
-legend("topright", 
-       legend = c("Class 0", "Class 1", "Correct Prediction", "Incorrect Prediction"),
-       col = c("red", "blue", "black", "black"),
-       pch = c(16, 16, 16, 4))
-
-# Evaluate the model at specific points to verify continuity
-evaluate_model = function(x1, x2) {
-  X_point = create_basis_matrix(x1, x2)
-  logit = sum(coef(model) * X_point)
-  prob = 1 / (1 + exp(-logit))
-  return(prob)
-}
-
-# Check continuity at x1 = 0.5 by evaluating points slightly to the left and right
-x1_left = 0.499
-x1_right = 0.501
-x2_test = 0.5
-
-prob_left = evaluate_model(x1_left, x2_test)
-prob_right = evaluate_model(x1_right, x2_test)
-
-cat("\nContinuity check at x1 = 0.5:\n")
-cat("Probability at x1 =", x1_left, ":", prob_left, "\n")
-cat("Probability at x1 =", x1_right, ":", prob_right, "\n")
-cat("Difference:", abs(prob_right - prob_left), "\n")
-
-# Similarly for x2 = 1
-x1_test = 0.5
-x2_below = 0.999
-x2_above = 1.001
-
-prob_below = evaluate_model(x1_test, x2_below)
-prob_above = evaluate_model(x1_test, x2_above)
-
-cat("\nContinuity check at x2 = 1:\n")
-cat("Probability at x2 =", x2_below, ":", prob_below, "\n")
-cat("Probability at x2 =", x2_above, ":", prob_above, "\n")
-cat("Difference:", abs(prob_above - prob_below), "\n")
-
-
-
-
-
-
+selected_vars # "age"     "ldl"     "tobacco"
+AIC(best_model) # 521.164
+train_acc # 0.7142857
